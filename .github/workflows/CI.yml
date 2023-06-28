@@ -1,0 +1,61 @@
+name: Testing
+
+on:
+  pull_request:
+    branches: ['*']
+  push:
+    branches: ['main']
+
+jobs:
+  CI:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+      - run: git checkout ${{ github.event.pull_request.head.sha || github.event.after }}
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v2.2.4
+
+      - name: Setup Node 18
+        uses: actions/setup-node@v3
+        with:
+          node-version: 18
+
+      - name: Get pnpm store directory
+        id: pnpm-cache
+        run: |
+          echo "pnpm_cache_dir=$(pnpm store path)" >> $GITHUB_OUTPUT
+
+      - name: Setup pnpm cache
+        uses: actions/cache@v3
+        with:
+          path: ${{ steps.pnpm-cache.outputs.pnpm_cache_dir }}
+          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-store-
+
+      - name: Install deps (with cache)
+        run: pnpm install
+
+      - name: Type checking
+        run: pnpm type-check
+
+      - name: Linting
+        run: pnpm lint
+
+      - name: Testing
+        run: pnpm test:cov
+
+      - name: Test e2e
+        run: pnpm test:e2e
+
+      - name: Build
+        run: pnpm build
+
+      # FIXME: Add this back once we have an Expo SDK supporting React 18.2
+      - name: Check workspaces
+        run: pnpm manypkg check
